@@ -1,0 +1,270 @@
+{
+  "name": "ai-research-agent",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "responseNodes"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5ddfc00b-8588-4ea7-a39f-b5fa680e855d",
+      "name": "When chat message received",
+      "webhookId": "7951c0bf-e90d-4ec8-95fa-ea1b61dbb52d"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a research analyst. Today's date is {{ $now.format('yyyy-MM-dd') }}.\n\nRULES:\n- Never ask clarifying questions. If the topic is broad, pick sensible defaults (global scope, last 7 days) and state your assumptions in one line.\n- Run at least 4 different searches from different angles (latest news, technical details, statistics, criticism/risks).\n- For every search, use topic \"news\" and time_range \"week\" when the topic is time-sensitive.\n- Only cite reputable sources (official sites, major news outlets, research papers, company blogs). Never cite social media posts, forums, or unknown domains.\n- Do not invent facts. If sources don't cover something, say so.\n\nOUTPUT FORMAT (Markdown):\n# <Report title>\n**Date:** <today> | **Scope:** <assumptions>\n## Executive Summary (5 lines max)\n## Key Findings (bullets, each with the source name and a link)\n## Latest Developments (with publish dates)\n## Conflicting Information\n## Risks and Open Questions\n## Sources (numbered list with URLs)",
+        "options": {
+          "systemMessage": "=You are a research analyst. Today's date is {{ $now.format('yyyy-MM-dd') }}.\n\nRULES:\n- Never ask clarifying questions. If the topic is broad, assume global scope and the last 7 days, and state this in one line.\n- Run 5 to 6 searches from different angles (major news, products and releases, research, funding and business, policy and regulation, risks and criticism). Never run more than 8 searches in total.\n- Search tool settings: always leave topic as \"general\". Never set topic to \"news\". Use max_results 5 and basic search depth, and do not request raw page content.\n- To keep results recent, set time_range to \"week\" if the tool accepts it. Also include the current month and year in the query text (for example \"October 2026\").\n- If a search call returns an error, fix that one parameter and retry once. Do not repeat the same failing call.\n- Only cite reputable sources: major news outlets, official company sites, research papers, government sites. Never cite social media, forums, or unknown domains.\n- Treat press releases and company blogs as vendor claims and say so inside the finding in one short phrase. Do not add separate \"Note:\" lines.\n- Every finding must have a publish date. If a source has no date, leave it out.\n- Copy every URL exactly and in full. Never shorten a URL with \"...\" or \"…\". If you cannot give the full URL, leave that source out.\n- Write each URL once, right after the source name. Do not repeat the date after the URL.\n- Do not invent facts.\n- Output ONLY the report below. No introduction, no closing remarks, no notes about methodology or sources, and nothing after the Sources list.\n\nOUTPUT FORMAT (Markdown):\n# <Report title>\n**Date:** <today> | **Scope:** <assumptions in one line>\n## Executive Summary\n(exactly 5 bullet points)\n## Key Findings\n(8 to 10 bullets, each with the source name, date and link)\n## Latest Developments\n(timeline, newest first, with dates)\n## Conflicting Information\n## Risks and Open Questions\n(5 to 6 bullets)\n## Sources\n(numbered list with title, date and URL)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        608,
+        32
+      ],
+      "id": "6e492d85-b3be-4b08-acfa-08b9fb81866a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        96,
+        176
+      ],
+      "id": "46850d21-6f1e-4069-a772-e47f91e87720",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        272,
+        208
+      ],
+      "id": "73f8ffb9-772b-4dbe-a4e1-ae2bfe6c2913",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/mcp-registry.tavily",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        240
+      ],
+      "id": "eb63d76b-3bc2-4373-a7a5-2d043351a60d",
+      "name": "Tavily MCP",
+      "credentials": {
+        "tavilyMcpOAuth2Api": {
+          "id": "xo47aNkvIIy2j7RG",
+          "name": "Tavily account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "markdownToHtml",
+        "markdown": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.markdown",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        16
+      ],
+      "id": "640cd405-1571-44c0-8998-bbf427f1bdbb",
+      "name": "Markdown"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data;\n\nconst titleMatch = html.match(/<h1[^>]*>([\\s\\S]*?)<\\/h1>/i);\nconst title = titleMatch\n  ? titleMatch[1].replace(/<[^>]+>/g, '').trim()\n  : 'Research Report';\n\nconst slug = title\n  .toLowerCase()\n  .replace(/[^a-z0-9]+/g, '_')\n  .replace(/^_+|_+$/g, '')\n  .slice(0, 50) || 'research_report';\n\nconst today = new Date().toISOString().slice(0, 10);\nconst fileName = `${slug}_${today}.doc`;\n\nconst doc = `<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" xmlns=\"http://www.w3.org/TR/REC-html40\">\n<head>\n<meta charset=\"utf-8\">\n<!--[if gte mso 9]>\n<xml>\n  <w:WordDocument>\n    <w:View>Print</w:View>\n    <w:Zoom>100</w:Zoom>\n  </w:WordDocument>\n</xml>\n<![endif]-->\n<style>\n  @page { size: 21cm 29.7cm; margin: 2cm; }\n  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #222222; }\n  h1 { font-size: 22pt; color: #1F3864; margin-bottom: 4pt; }\n  h2 { font-size: 15pt; color: #2F5496; border-bottom: 1px solid #cccccc; margin-top: 18pt; }\n  a { color: #0563C1; }\n  li { margin-bottom: 4pt; }\n  table { border-collapse: collapse; }\n  td, th { border: 1px solid #999999; padding: 4px 8px; }\n  .footer { font-size: 9pt; color: #777777; margin-top: 24pt; border-top: 1px solid #cccccc; padding-top: 6pt; }\n</style>\n</head>\n<body>\n${html}\n<p class=\"footer\">Generated automatically on ${today}. Verify key facts using the linked sources.</p>\n</body>\n</html>`;\n\nconst binary = await this.helpers.prepareBinaryData(\n  Buffer.from(doc, 'utf8'),\n  fileName,\n  'application/msword'\n);\n\nreturn [{ json: { fileName, title }, binary: { data: binary } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        32
+      ],
+      "id": "be149153-0e3b-42bb-83c0-3dd80bb834a3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "sendTo": "sharmila949231@gmail.com",
+        "subject": "={{ $json.title }}",
+        "message": "={{ $('Markdown').item.json.data }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {}
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1504,
+        32
+      ],
+      "id": "7f8e2cd8-a99f-4016-9c05-4e8c3fb810ec",
+      "name": "Send a message",
+      "webhookId": "5856485b-1c55-47b8-9c8d-ae2b3c977857",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZwBkF6OSWJ9JqM3l",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "message": "=Researching \"{{ $json.chatInput }}\". The Word report will arrive in your email in about 2 minutes.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chat",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        -16
+      ],
+      "id": "6645eea6-6d7e-4162-ad10-f99a32968a7e",
+      "name": "Chat",
+      "webhookId": "fd30ba23-d22a-4300-ad3f-b712084a01f8"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily MCP": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Markdown": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "9bbf11be-e721-40d0-a21f-468dbacf4463",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bb18842f3a9934f312c9e324407ee4accfbc5a21cc68412a6e05c49d0d936fac"
+  },
+  "nodeGroups": [],
+  "id": "VV7gsHwHJjNzu4b9",
+  "tags": []
+}
